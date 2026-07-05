@@ -73,7 +73,7 @@ async function sendSrc(ports: number[]) {
     command.push("-minrate", "1000k");
     command.push("-bufsize", "1000k");
     command.push("-g", "30");
-    command.push("-ssrc", `1000${port}`);
+    command.push("-ssrc", "1000");
     command.push("-payload_type", "96");
     command.push("-f", "rtp");
     command.push(`rtp://${targetHost}:${port}?pkt_size=1050`);
