@@ -1,0 +1,5 @@
+class MediaSession {
+    
+}
+
+export { MediaSession };
