@@ -14,7 +14,9 @@ class WebSocketHandler {
   @OnMessage("getLeastLoadedConsumerHub")
   async getLeastLoadedConsumerHub(ws: WebSocket, message: WebSocketRequest) {
     const hub = this.topology.getLeastLoadedConsumerHub();
-    assertNotNull(ws, message.requestId, hub);
+    if (!hub) {
+      throw new Error("hub is null");
+    }
     sendMessage(ws, {
       requestId: message.requestId,
       payload: { hubId: hub?.id },
@@ -25,7 +27,9 @@ class WebSocketHandler {
   async getRouterRtpCapabilities(ws: WebSocket, message: WebSocketRequest) {
     const hub = this.topology.getHub(message.payload!.hubId);
     const routerRtpCapabilities = hub?.getRouterRtpCapabilities();
-    assertNotNull(ws, message.requestId, routerRtpCapabilities);
+    if (!routerRtpCapabilities) {
+      throw new Error("routerRtpCapabilities is null");
+    }
     sendMessage(ws, {
       requestId: message.requestId,
       payload: routerRtpCapabilities,
@@ -36,7 +40,9 @@ class WebSocketHandler {
   async createWebRtcTransport(ws: WebSocket, message: WebSocketRequest) {
     const hub = this.topology.getHub(message.payload!.hubId);
     const webRtcTransport = await hub?.createWebRtcTransport()!;
-    assertNotNull(ws, message.requestId, webRtcTransport);
+    if (!webRtcTransport) {
+      throw new Error("webRtcTransport is null");
+    }
     sendMessage(ws, {
       requestId: message.requestId,
       payload: {
@@ -57,7 +63,9 @@ class WebSocketHandler {
       transportId: message.payload!.transportId,
       rtpCapabilities: message.payload!.rtpCapabilities,
     });
-    assertNotNull(ws, message.requestId, consumer);
+    if (!consumer) {
+      throw new Error("consumer is null");
+    }
     sendMessage(ws, {
       requestId: message.requestId,
       payload: {
@@ -169,17 +177,6 @@ function sendMessage(ws: WebSocket, message: WebSocketResponse) {
       error: message.error,
     }),
   );
-}
-
-function assertNotNull(ws: WebSocket, requestId: string, value: any) {
-  if (value === null) {
-    ws.send(
-      JSON.stringify({
-        requestId: requestId,
-        error: "Value is null",
-      }),
-    );
-  }
 }
 
 export { ApiServer };
