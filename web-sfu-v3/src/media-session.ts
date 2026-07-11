@@ -1,5 +1,0 @@
-class MediaSession {
-    
-}
-
-export { MediaSession };

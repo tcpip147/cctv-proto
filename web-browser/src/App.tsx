@@ -1,14 +1,23 @@
-import { useEffect, useRef } from "react";
-import "./App.css";
 import { Device } from "mediasoup-client";
+import { useEffect, useRef, useState } from "react";
+import "./App.css";
 import { WebSocketSync } from "./common/WebSocketSync";
+import type {
+  RtpCapabilities,
+  Transport,
+  TransportOptions,
+} from "mediasoup-client/types";
+
+const device = new Device();
+const cctvList = Array.from({ length: 2 }, (_, i) => `video${i}`);
+let hubId: string;
+let recvTransport: Transport;
 
 function App() {
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
-  const cctvList = Array.from({ length: 20 }, (_, i) => `cctv_${i + 1}`);
-
-  const deviceRef = useRef<Device | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const [isConnectedWebRtc, setIsConnectedWebRtc] = useState(false);
+
   useEffect(() => {
     connectWebSocket();
     return () => {
@@ -18,65 +27,94 @@ function App() {
     };
   }, []);
 
+  const connectWebRtc = async (ws: WebSocketSync) => {
+    hubId = (
+      (await ws.sendSync({
+        type: "getLeastLoadedConsumerHub",
+      })) as { hubId: string }
+    ).hubId;
+
+    const routerRtpCapabilities = (await ws.sendSync({
+      type: "getRouterRtpCapabilities",
+      payload: { hubId },
+    })) as RtpCapabilities;
+
+    await device.load({
+      routerRtpCapabilities: routerRtpCapabilities,
+    });
+
+    const webRtcTransport = (await ws.sendSync({
+      type: "createWebRtcTransport",
+      payload: { hubId },
+    })) as TransportOptions;
+
+    recvTransport = device.createRecvTransport(webRtcTransport) as Transport;
+    recvTransport.on("connect", async ({ dtlsParameters }, callback) => {
+      await ws.sendSync({
+        type: "connectWebRtcTransport",
+        payload: { hubId, transportId: recvTransport.id, dtlsParameters },
+      });
+      callback();
+    });
+
+    setIsConnectedWebRtc(true);
+  };
+
+  const consumeVideo = async (ws: WebSocketSync, videoId: string) => {
+    const consumerInfo = (await ws.sendSync({
+      type: "createConsumer",
+      payload: {
+        hubId,
+        videoId,
+        transportId: recvTransport.id,
+        rtpCapabilities: device.recvRtpCapabilities,
+      },
+    })) as {
+      id: string;
+      producerId: string;
+      kind: "video";
+      rtpParameters: any;
+    };
+
+    const consumer = await recvTransport.consume({
+      id: consumerInfo.id,
+      producerId: consumerInfo.producerId,
+      kind: consumerInfo.kind,
+      rtpParameters: consumerInfo.rtpParameters,
+    });
+
+    const videoElement = videoRefs.current[videoId];
+    if (videoElement) {
+      const newStream = new MediaStream([consumer.track]);
+      videoElement.srcObject = newStream;
+      videoElement.play().catch(console.error);
+
+      await ws.sendSync({
+        type: "resumeConsumer",
+        payload: {
+          hubId,
+          consumerId: consumer.id,
+        },
+      });
+    }
+  };
+
   const connectWebSocket = () => {
-    const wsUrl = "ws://localhost:3000";
+    const wsUrl = "ws://localhost:8080/signal";
     const ws = new WebSocketSync(wsUrl);
     socketRef.current = ws;
 
-    ws.onopen = async () => {};
+    ws.onopen = async () => {
+      if (!isConnectedWebRtc) {
+        await connectWebRtc(ws);
+        for (const videoId of cctvList) {
+          consumeVideo(ws, videoId);
+        }
+      }
+    };
 
     ws.onmessage = async (event) => {
       const message = JSON.parse(event.data);
-      if (message.type == "routerRtpCapabilities") {
-        deviceRef.current = new Device();
-        await deviceRef.current.load({
-          routerRtpCapabilities: message.data,
-        });
-        const webRtcTransport = await ws.sendSync({
-          type: "createWebRtcTransport",
-        });
-        const recvTransport =
-          deviceRef.current?.createRecvTransport(webRtcTransport);
-        recvTransport?.on(
-          "connect",
-          async ({ dtlsParameters }, callback) => {
-            await ws.sendSync({
-              type: "connectionCallback",
-              transportId: recvTransport.id,
-              dtlsParameters,
-            });
-            callback();
-          },
-        );
-
-        for (let i = 0; i < 20; i++) {
-          const consumerInfo = await ws.sendSync({
-            type: "createConsumer",
-            video: 25000 + i,
-            transportId: recvTransport.id,
-            rtpCapabilities: deviceRef.current.recvRtpCapabilities,
-          });
-
-          const consumer = await recvTransport.consume({
-            id: consumerInfo.id,
-            producerId: consumerInfo.producerId,
-            kind: consumerInfo.kind,
-            rtpParameters: consumerInfo.rtpParameters,
-          });
-
-          await ws.sendSync({
-            type: "resumeConsumer",
-            consumerId: consumer.id,
-          });
-
-          const videoElement = videoRefs.current["cctv_" + (i + 1)];
-          if (videoElement) {
-            const newStream = new MediaStream([consumer.track]);
-            videoElement.srcObject = newStream;
-            videoElement.play().catch(console.error);
-          }
-        }
-      }
     };
 
     ws.onclose = async () => {

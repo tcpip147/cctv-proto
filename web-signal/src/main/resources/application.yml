@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: signal
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger - %msg%n"
+  level:
+    root: INFO
+    org.springframework: INFO
+    _org.springframework: INFO
+
+server:
+  port: 8080
+
+sfu:
+  url: "ws://localhost:3000"

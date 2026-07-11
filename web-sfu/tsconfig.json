@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "module": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,
