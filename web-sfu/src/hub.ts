@@ -2,6 +2,7 @@ import * as mediasoup from "mediasoup";
 import {
   Consumer,
   DtlsParameters,
+  IceState,
   PlainTransport,
   Producer,
   Router,
@@ -52,7 +53,7 @@ class Hub {
   private pipeProducers = new Map<string, Producer[]>();
   private onCloseListeners: ((hubId: string) => void)[] = [];
   private webRtcTransports = new Map<string, WebRtcTransport>();
-  private consumers = new Map<string, Consumer>();
+  private consumers = new Map<string, Consumer[]>();
 
   public static create(options: ProducerHubOptions | ConsumerHubOptions) {
     return new Hub(options);
@@ -207,6 +208,15 @@ class Hub {
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
+      iceConsentTimeout: 10,
+    });
+
+    webRtcTransport.on("icestatechange", (iceState: IceState) => {
+      if (iceState === "disconnected") {
+        webRtcTransport.close();
+        this.consumers.delete(webRtcTransport.id);
+        this.webRtcTransports.delete(webRtcTransport.id);
+      }
     });
 
     this.webRtcTransports.set(webRtcTransport.id, webRtcTransport);
@@ -229,14 +239,17 @@ class Hub {
       rtpCapabilities,
     });
     if (canConsume) {
-      const webRtcTransport = this.webRtcTransports.get(transportId);
-      const consumer = await webRtcTransport!.consume({
+      const webRtcTransport = this.webRtcTransports.get(transportId)!;
+      const consumer = await webRtcTransport.consume({
         producerId: producer!.id,
         rtpCapabilities,
         paused: true,
       });
 
-      this.consumers.set(consumer.id, consumer);
+      if (!this.consumers.has(webRtcTransport.id)) {
+        this.consumers.set(webRtcTransport.id, []);
+      }
+      this.consumers.get(webRtcTransport.id)!.push(consumer);
 
       return {
         id: consumer.id,
@@ -260,9 +273,18 @@ class Hub {
     await webRtcTransport!.connect({ dtlsParameters });
   }
 
-  public async resumeConsumer({ consumerId }: { consumerId: string }) {
-    const consumer = this.consumers.get(consumerId);
-    await consumer!.resume();
+  public async resumeConsumer({
+    transportId,
+    consumerId,
+  }: {
+    transportId: string;
+    consumerId: string;
+  }) {
+    const consumers = this.consumers.get(transportId);
+    if (consumers) {
+      const consumer = consumers.find((c) => c.id === consumerId);
+      await consumer!.resume();
+    }
   }
 }
 

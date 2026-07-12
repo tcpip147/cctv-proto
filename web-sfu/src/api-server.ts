@@ -93,6 +93,7 @@ class WebSocketHandler {
   async resumeConsumer(ws: WebSocket, message: WebSocketRequest) {
     const hub = this.topology.getHub(message.payload!.hubId);
     await hub?.resumeConsumer({
+      transportId: message.payload!.transportId,
       consumerId: message.payload!.consumerId,
     });
     sendMessage(ws, {
@@ -145,14 +146,17 @@ class ApiServer {
           try {
             await messageRoute(ws, message);
             return;
-          } catch (err) {
-            logger.error(err);
+          } catch (err: any) {
+            sendMessage(ws, {
+              requestId: message.requestId,
+              error: { message: err.message },
+            });
           }
         }
 
         sendMessage(ws, {
           requestId: message.requestId,
-          error: { message: "Error" },
+          error: { message: "No matched type" },
         });
       });
     });
