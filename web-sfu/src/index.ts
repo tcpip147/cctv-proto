@@ -52,6 +52,24 @@ topology.createHub({
   producerOptions: [
     { id: "video0", ip: "127.0.0.1", port: 25000, videoCodecs },
     { id: "video1", ip: "127.0.0.1", port: 25001, videoCodecs },
+    { id: "video2", ip: "127.0.0.1", port: 25002, videoCodecs },
+    { id: "video3", ip: "127.0.0.1", port: 25003, videoCodecs },
+    { id: "video4", ip: "127.0.0.1", port: 25004, videoCodecs },
+    { id: "video5", ip: "127.0.0.1", port: 25005, videoCodecs },
+    { id: "video6", ip: "127.0.0.1", port: 25006, videoCodecs },
+    { id: "video7", ip: "127.0.0.1", port: 25007, videoCodecs },
+    { id: "video8", ip: "127.0.0.1", port: 25008, videoCodecs },
+    { id: "video9", ip: "127.0.0.1", port: 25009, videoCodecs },
+    { id: "video10", ip: "127.0.0.1", port: 25010, videoCodecs },
+    { id: "video11", ip: "127.0.0.1", port: 25011, videoCodecs },
+    { id: "video12", ip: "127.0.0.1", port: 25012, videoCodecs },
+    { id: "video13", ip: "127.0.0.1", port: 25013, videoCodecs },
+    { id: "video14", ip: "127.0.0.1", port: 25014, videoCodecs },
+    { id: "video15", ip: "127.0.0.1", port: 25015, videoCodecs },
+    { id: "video16", ip: "127.0.0.1", port: 25016, videoCodecs },
+    { id: "video17", ip: "127.0.0.1", port: 25017, videoCodecs },
+    { id: "video18", ip: "127.0.0.1", port: 25018, videoCodecs },
+    { id: "video19", ip: "127.0.0.1", port: 25019, videoCodecs },
   ],
 });
 
@@ -63,29 +81,22 @@ topology.createHub({
   },
 });
 
-topology.createHub({
-  id: "hub2",
-  role: ["consumer"],
-  consumerOption: {
-    port: 40001,
-  },
-});
-
 topology.createPipe("hub0", "hub1");
-topology.createPipe("hub0", "hub2");
 
 await topology.start();
 
-const rtsp = Rtsp.create([
-  {
-    rtspUrl: "rtsp://210.99.70.120:1935/live/cctv001.stream",
-    rtpUrl: "rtp://127.0.0.1:25000?pkt_size=1200",
-  },
-  {
-    rtspUrl: "rtsp://210.99.70.120:1935/live/cctv002.stream",
-    rtpUrl: "rtp://127.0.0.1:25001?pkt_size=1200",
-  },
-]);
+const rtspRequests = [];
+
+for (let i = 0; i < 12; i++) {
+  const cctv = String(i + 1).padStart(2, "0");
+  const port = String(i).padStart(2, "0");
+  rtspRequests.push({
+    rtspUrl: `rtsp://210.99.70.120:1935/live/cctv0${cctv}.stream`,
+    rtpUrl: `rtp://127.0.0.1:250${port}?pkt_size=1200`,
+  });
+}
+
+const rtsp = Rtsp.create(rtspRequests);
 
 await rtsp.start({
   groupSize: 12,

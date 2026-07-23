@@ -1,28 +1,18 @@
 import "./App.css";
-import { useWebSocket } from "./hooks/useWebSocket";
+import VideoPlayer from "./components/VideoPlayer";
+import { useMediasoupConnection } from "./hooks/useMediasoupConnection";
+
+const cctvList = Array.from({ length: 12 }, (_, i) => `video${i}`);
 
 function App() {
-  const { sendAndWait, isConnected, reconnect } = useWebSocket(
-    "ws://localhost:8080/signal",
-    {
-      onOpen: async () => {
-        const hub = await sendAndWait({
-          type: "getLeastLoadedConsumerHub",
-        });
-        console.log(hub);
-      },
-      onClose: () => {
-        console.log("closed");
-        setTimeout(reconnect, 3000);
-      },
-      onMessage: (event) => {
-        
-      },
-    },
-  );
+  const { streams } = useMediasoupConnection("ws://localhost:3000", cctvList);
 
   return (
-    <div className="App">{isConnected ? "connected" : "disconnected"}</div>
+    <>
+      {cctvList.map((cctvId: string) => (
+        <VideoPlayer key={cctvId} stream={streams[cctvId]} />
+      ))}
+    </>
   );
 }
 

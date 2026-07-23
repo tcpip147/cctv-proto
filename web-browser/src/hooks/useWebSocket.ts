@@ -29,11 +29,11 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
   const optionsRef = useRef(options);
   const pendingRequestsRef = useRef<Map<string, PendingRequest>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   optionsRef.current = options;
 
   useEffect(() => {
-    connect();
     return () => {
       if (socketRef.current) {
         socketRef.current.close();
@@ -43,6 +43,8 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
   }, [url]);
 
   const connect = useCallback(() => {
+    setIsConnecting(true);
+
     if (socketRef.current) {
       socketRef.current.onopen = null;
       socketRef.current.onmessage = null;
@@ -56,6 +58,7 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
 
     socket.onopen = () => {
       setIsConnected(true);
+      setIsConnecting(false);
       optionsRef.current?.onOpen?.();
     };
 
@@ -83,6 +86,7 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
 
     socket.onclose = () => {
       setIsConnected(false);
+      setIsConnecting(false);
       pendingRequestsRef.current.forEach(({ reject, timeout }) => {
         clearTimeout(timeout);
         reject(new Error("WebSocket is closed before receiving response"));
@@ -93,13 +97,18 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
     };
 
     socket.onerror = () => {
+      setIsConnected(false);
+      setIsConnecting(false);
       optionsRef.current?.onError?.();
     };
   }, []);
 
-  const reconnect = useCallback(() => {
-    connect();
-  }, [connect]);
+  const close = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+  }, []);
 
   const send = useCallback((data: string | BufferSource | Blob) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -143,10 +152,12 @@ function useWebSocket(url: string, options?: UseWebSocketOptions) {
   );
 
   return {
+    connect,
+    isConnected,
+    isConnecting,
+    close,
     send,
     sendAndWait,
-    isConnected,
-    reconnect,
   };
 }
 
