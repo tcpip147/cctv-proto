@@ -55,10 +55,10 @@ class WebSocketHandler {
     });
   }
 
-  @OnMessage("createConsumer")
-  async createConsumer(ws: WebSocket, message: WebSocketRequest) {
+  @OnMessage("createVideoConsumer")
+  async createVideoConsumer(ws: WebSocket, message: WebSocketRequest) {
     const hub = this.topology.getHub(message.payload!.hubId);
-    const consumer = await hub?.createConsumer({
+    const consumer = await hub?.createVideoConsumer({
       videoId: message.payload!.videoId,
       transportId: message.payload!.transportId,
       rtpCapabilities: message.payload!.rtpCapabilities,

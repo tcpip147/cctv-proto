@@ -180,7 +180,7 @@ function useMediasoupConnection(url: string, videoIds: string[]) {
         try {
           for (const videoId of videoIds) {
             const consumerInfo = (await ws.sendAndWait({
-              type: "createConsumer",
+              type: "createVideoConsumer",
               payload: {
                 hubId: hubIdRef.current,
                 videoId,

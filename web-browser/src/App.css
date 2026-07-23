@@ -1,4 +1,9 @@
 video {
   width: 25%;
-  height: 25%;
+  aspect-ratio: 4 / 2.62;
+  object-fit: fill;
+  margin: 0;
+  padding: 0;
+  display: block;
+  float: left;
 }

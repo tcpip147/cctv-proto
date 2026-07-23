@@ -1,6 +1,8 @@
 import * as mediasoup from "mediasoup";
 import {
   Consumer,
+  DataConsumer,
+  DataProducer,
   DtlsParameters,
   IceState,
   PlainTransport,
@@ -38,6 +40,7 @@ interface ProducerOption {
   id: string;
   ip: string;
   port: number;
+  enableSctp?: boolean;
   videoCodecs: RtpCodecParameters[];
 }
 
@@ -64,12 +67,15 @@ class Hub {
   private router!: Router;
   private webRtcServer!: WebRtcServer;
   private plainTransports = new Map<string, PlainTransport>();
-  private producers = new Map<string, Producer>();
+  private videoProducers = new Map<string, Producer>();
+  private dataProducers = new Map<string, DataProducer>();
   private proxies: Proxy[] = [];
-  private pipeProducers = new Map<string, Producer[]>();
+  private pipeVideoProducers = new Map<string, Producer[]>();
+  private pipeDataProducers = new Map<string, DataProducer[]>();
   private onCloseListeners: ((hubId: string) => void)[] = [];
   private webRtcTransports = new Map<string, WebRtcTransport>();
-  private consumers = new Map<string, Consumer[]>();
+  private videoConsumers = new Map<string, Consumer[]>();
+  private dataConsumers = new Map<string, DataConsumer[]>();
 
   public static create(
     options: CombinedHubOption | ProducerHubOption | ConsumerHubOption,
@@ -123,28 +129,29 @@ class Hub {
     }
 
     if (this.role.includes("producer") && this.producerOptions) {
-      for (const producerOptions of this.producerOptions) {
+      for (const producerOption of this.producerOptions) {
         const transport = await this.router.createPlainTransport({
           listenIp: { ip: "127.0.0.1" },
           rtcpMux: true,
           comedia: true,
+          enableSctp: producerOption.enableSctp,
         });
 
-        this.plainTransports.set(producerOptions.id, transport);
+        this.plainTransports.set(producerOption.id, transport);
 
         const proxy = new Proxy(
-          producerOptions.ip,
-          producerOptions.port,
+          producerOption.ip,
+          producerOption.port,
           "127.0.0.1",
           transport.tuple.localPort,
         );
         this.proxies.push(proxy);
         await proxy.start();
 
-        const producer = await transport.produce({
+        const videoProducer = await transport.produce({
           kind: "video",
           rtpParameters: {
-            codecs: producerOptions.videoCodecs,
+            codecs: producerOption.videoCodecs,
             encodings: [
               {
                 ssrc: 1000,
@@ -153,7 +160,17 @@ class Hub {
           },
         });
 
-        this.producers.set(producerOptions.id, producer);
+        this.videoProducers.set(producerOption.id, videoProducer);
+
+        const dataProducer = await transport.produceData({
+          label: producerOption.id,
+          sctpStreamParameters: {
+            streamId: 0,
+            ordered: false,
+          },
+        });
+
+        this.dataProducers.set(dataProducer.id, dataProducer);
 
         /*
         setInterval(async () => {
@@ -163,7 +180,7 @@ class Hub {
         */
 
         logger.info(
-          `Producer ${producerOptions.id} created on port ${producerOptions.port}`,
+          `Producer ${producerOption.id} created on port ${producerOption.port}`,
         );
       }
     }
@@ -179,9 +196,12 @@ class Hub {
       proxy.stop();
     });
     this.proxies.length = 0;
-    this.producers.clear();
-    this.pipeProducers.clear();
-    this.consumers.clear();
+    this.videoProducers.clear();
+    this.dataProducers.clear();
+    this.pipeVideoProducers.clear();
+    this.pipeDataProducers.clear();
+    this.videoConsumers.clear();
+    this.dataConsumers.clear();
     this.webRtcTransports.clear();
     this.worker!.close();
     this.isStopped = true;
@@ -190,34 +210,56 @@ class Hub {
 
   public async pipeToRouter(toHub: Hub) {
     logger.info(`Hub ${this.id} pipe to ${toHub.id}`);
-    for (const producer of this.producers.values()) {
+    for (const producer of this.videoProducers.values()) {
       const { pipeProducer } = await this.router.pipeToRouter({
         producerId: producer.id,
         router: toHub.router,
       });
       const videoId = this.getVideoId(producer);
       if (videoId) {
-        if (!toHub.pipeProducers.has(this.id)) {
-          toHub.pipeProducers.set(this.id, []);
+        if (!toHub.pipeVideoProducers.has(this.id)) {
+          toHub.pipeVideoProducers.set(this.id, []);
         }
-        toHub.pipeProducers.get(this.id)!.push(pipeProducer!);
-        toHub.producers.set(videoId, pipeProducer!);
+        toHub.pipeVideoProducers.get(this.id)!.push(pipeProducer!);
+        toHub.videoProducers.set(videoId, pipeProducer!);
+      }
+    }
+
+    for (const producer of this.dataProducers.values()) {
+      const { pipeDataProducer } = await this.router.pipeToRouter({
+        producerId: producer.id,
+        router: toHub.router,
+      });
+      const videoId = producer.label;
+      if (videoId) {
+        if (!toHub.pipeDataProducers.has(this.id)) {
+          toHub.pipeDataProducers.set(this.id, []);
+        }
+        toHub.pipeDataProducers.get(this.id)!.push(pipeDataProducer!);
+        toHub.dataProducers.set(videoId, pipeDataProducer!);
       }
     }
   }
 
   public removePipe(fromHub: string) {
-    const pipeProducers = this.pipeProducers.get(fromHub);
-    if (pipeProducers) {
-      for (const pipeProducer of pipeProducers) {
-        this.producers.delete(this.getVideoId(pipeProducer)!);
+    const pipeVideoProducers = this.pipeVideoProducers.get(fromHub);
+    if (pipeVideoProducers) {
+      for (const pipeVideoProducer of pipeVideoProducers) {
+        this.videoProducers.delete(this.getVideoId(pipeVideoProducer)!);
+      }
+    }
+
+    const pipeDataProducers = this.pipeDataProducers.get(fromHub);
+    if (pipeDataProducers) {
+      for (const pipeDataProducer of pipeDataProducers) {
+        this.videoProducers.delete(pipeDataProducer.label);
       }
     }
   }
 
   private getVideoId(producer: Producer) {
-    for (const videoId of this.producers.keys()) {
-      const videoProducer = this.producers.get(videoId)!;
+    for (const videoId of this.videoProducers.keys()) {
+      const videoProducer = this.videoProducers.get(videoId)!;
       if (videoProducer.id === producer.id) {
         return videoId;
       }
@@ -234,7 +276,7 @@ class Hub {
   }
 
   public getConsumerCount() {
-    return this.consumers.size;
+    return this.videoConsumers.size;
   }
 
   public getRouterRtpCapabilities() {
@@ -253,7 +295,8 @@ class Hub {
     webRtcTransport.on("icestatechange", (iceState: IceState) => {
       if (iceState === "disconnected") {
         webRtcTransport.close();
-        this.consumers.delete(webRtcTransport.id);
+        this.videoConsumers.delete(webRtcTransport.id);
+        this.dataConsumers.delete(webRtcTransport.id);
         this.webRtcTransports.delete(webRtcTransport.id);
       }
     });
@@ -263,7 +306,7 @@ class Hub {
     return webRtcTransport;
   }
 
-  public async createConsumer({
+  public async createVideoConsumer({
     videoId,
     transportId,
     rtpCapabilities,
@@ -272,29 +315,29 @@ class Hub {
     transportId: string;
     rtpCapabilities: RtpCapabilities;
   }) {
-    const producer = this.producers.get(videoId);
+    const producer = this.videoProducers.get(videoId);
     const canConsume = this.router.canConsume({
       producerId: producer!.id,
       rtpCapabilities,
     });
     if (canConsume) {
       const webRtcTransport = this.webRtcTransports.get(transportId)!;
-      const consumer = await webRtcTransport.consume({
+      const videoConsumer = await webRtcTransport.consume({
         producerId: producer!.id,
         rtpCapabilities,
         paused: true,
       });
 
-      if (!this.consumers.has(webRtcTransport.id)) {
-        this.consumers.set(webRtcTransport.id, []);
+      if (!this.videoConsumers.has(webRtcTransport.id)) {
+        this.videoConsumers.set(webRtcTransport.id, []);
       }
-      this.consumers.get(webRtcTransport.id)!.push(consumer);
+      this.videoConsumers.get(webRtcTransport.id)!.push(videoConsumer);
 
       return {
-        id: consumer.id,
-        producerId: consumer.producerId,
-        kind: consumer.kind,
-        rtpParameters: consumer.rtpParameters,
+        id: videoConsumer.id,
+        producerId: videoConsumer.producerId,
+        kind: videoConsumer.kind,
+        rtpParameters: videoConsumer.rtpParameters,
       };
     }
 
@@ -319,7 +362,7 @@ class Hub {
     transportId: string;
     consumerId: string;
   }) {
-    const consumers = this.consumers.get(transportId);
+    const consumers = this.videoConsumers.get(transportId);
     if (consumers) {
       const consumer = consumers.find((c) => c.id === consumerId);
       await consumer!.resume();

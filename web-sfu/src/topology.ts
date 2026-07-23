@@ -26,6 +26,7 @@ interface ProducerOption {
   id: string;
   ip: string;
   port: number;
+  enableSctp?: boolean;
   videoCodecs: RtpCodecParameters[];
 }
 

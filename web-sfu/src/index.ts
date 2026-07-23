@@ -50,26 +50,26 @@ topology.createHub({
   id: "hub0",
   role: ["producer"],
   producerOptions: [
-    { id: "video0", ip: "127.0.0.1", port: 25000, videoCodecs },
-    { id: "video1", ip: "127.0.0.1", port: 25001, videoCodecs },
-    { id: "video2", ip: "127.0.0.1", port: 25002, videoCodecs },
-    { id: "video3", ip: "127.0.0.1", port: 25003, videoCodecs },
-    { id: "video4", ip: "127.0.0.1", port: 25004, videoCodecs },
-    { id: "video5", ip: "127.0.0.1", port: 25005, videoCodecs },
-    { id: "video6", ip: "127.0.0.1", port: 25006, videoCodecs },
-    { id: "video7", ip: "127.0.0.1", port: 25007, videoCodecs },
-    { id: "video8", ip: "127.0.0.1", port: 25008, videoCodecs },
-    { id: "video9", ip: "127.0.0.1", port: 25009, videoCodecs },
-    { id: "video10", ip: "127.0.0.1", port: 25010, videoCodecs },
-    { id: "video11", ip: "127.0.0.1", port: 25011, videoCodecs },
-    { id: "video12", ip: "127.0.0.1", port: 25012, videoCodecs },
-    { id: "video13", ip: "127.0.0.1", port: 25013, videoCodecs },
-    { id: "video14", ip: "127.0.0.1", port: 25014, videoCodecs },
-    { id: "video15", ip: "127.0.0.1", port: 25015, videoCodecs },
-    { id: "video16", ip: "127.0.0.1", port: 25016, videoCodecs },
-    { id: "video17", ip: "127.0.0.1", port: 25017, videoCodecs },
-    { id: "video18", ip: "127.0.0.1", port: 25018, videoCodecs },
-    { id: "video19", ip: "127.0.0.1", port: 25019, videoCodecs },
+    { id: "video0", ip: "127.0.0.1", port: 25000, enableSctp: true, videoCodecs },
+    { id: "video1", ip: "127.0.0.1", port: 25001, enableSctp: true, videoCodecs },
+    { id: "video2", ip: "127.0.0.1", port: 25002, enableSctp: true, videoCodecs },
+    { id: "video3", ip: "127.0.0.1", port: 25003, enableSctp: true, videoCodecs },
+    { id: "video4", ip: "127.0.0.1", port: 25004, enableSctp: true, videoCodecs },
+    { id: "video5", ip: "127.0.0.1", port: 25005, enableSctp: true, videoCodecs },
+    { id: "video6", ip: "127.0.0.1", port: 25006, enableSctp: true, videoCodecs },
+    { id: "video7", ip: "127.0.0.1", port: 25007, enableSctp: true, videoCodecs },
+    { id: "video8", ip: "127.0.0.1", port: 25008, enableSctp: true, videoCodecs },
+    { id: "video9", ip: "127.0.0.1", port: 25009, enableSctp: true, videoCodecs },
+    { id: "video10", ip: "127.0.0.1", port: 25010, enableSctp: true, videoCodecs },
+    { id: "video11", ip: "127.0.0.1", port: 25011, enableSctp: true, videoCodecs },
+    { id: "video12", ip: "127.0.0.1", port: 25012, enableSctp: true, videoCodecs },
+    { id: "video13", ip: "127.0.0.1", port: 25013, enableSctp: true, videoCodecs },
+    { id: "video14", ip: "127.0.0.1", port: 25014, enableSctp: true, videoCodecs },
+    { id: "video15", ip: "127.0.0.1", port: 25015, enableSctp: true, videoCodecs },
+    { id: "video16", ip: "127.0.0.1", port: 25016, enableSctp: true, videoCodecs },
+    { id: "video17", ip: "127.0.0.1", port: 25017, enableSctp: true, videoCodecs },
+    { id: "video18", ip: "127.0.0.1", port: 25018, enableSctp: true, videoCodecs },
+    { id: "video19", ip: "127.0.0.1", port: 25019, enableSctp: true, videoCodecs },
   ],
 });
 
@@ -99,7 +99,7 @@ for (let i = 0; i < 12; i++) {
 const rtsp = Rtsp.create(rtspRequests);
 
 await rtsp.start({
-  groupSize: 12,
+  groupSize: 1,
 });
 
 const server = new ApiServer(3000, topology);

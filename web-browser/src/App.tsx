@@ -10,7 +10,7 @@ function App() {
   return (
     <>
       {cctvList.map((cctvId: string) => (
-        <VideoPlayer key={cctvId} stream={streams[cctvId]} />
+        <VideoPlayer key={cctvId} videoId={cctvId} stream={streams[cctvId]} />
       ))}
     </>
   );
