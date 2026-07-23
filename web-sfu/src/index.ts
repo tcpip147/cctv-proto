@@ -2,6 +2,7 @@ import { RtpCodecParameters } from "mediasoup/types";
 import { ApiServer } from "./api-server.js";
 import logger from "./logger.js";
 import { Topology } from "./topology.js";
+import { Rtsp } from "./rtsp.js";
 
 logger.info("SFU Streaming Server Starting...");
 
@@ -24,6 +25,7 @@ const videoCodecs: RtpCodecParameters[] = [
 ];
 
 const topology = Topology.create({
+  publicIp: "127.0.0.1",
   portRange: [40000, 40100],
   availableCodecs: [
     {
@@ -56,11 +58,17 @@ topology.createHub({
 topology.createHub({
   id: "hub1",
   role: ["consumer"],
+  consumerOption: {
+    port: 40000,
+  },
 });
 
 topology.createHub({
   id: "hub2",
   role: ["consumer"],
+  consumerOption: {
+    port: 40001,
+  },
 });
 
 topology.createPipe("hub0", "hub1");
@@ -68,10 +76,23 @@ topology.createPipe("hub0", "hub2");
 
 await topology.start();
 
+const rtsp = Rtsp.create([
+  {
+    rtspUrl: "rtsp://210.99.70.120:1935/live/cctv001.stream",
+    rtpUrl: "rtp://127.0.0.1:25000?pkt_size=1200",
+  },
+  {
+    rtspUrl: "rtsp://210.99.70.120:1935/live/cctv002.stream",
+    rtpUrl: "rtp://127.0.0.1:25001?pkt_size=1200",
+  },
+]);
+
+await rtsp.start({
+  groupSize: 12,
+});
+
 const server = new ApiServer(3000, topology);
 server.start();
-
-
 
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));

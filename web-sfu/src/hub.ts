@@ -9,44 +9,60 @@ import {
   RouterRtpCodecCapability,
   RtpCapabilities,
   RtpCodecParameters,
+  WebRtcServer,
   WebRtcTransport,
   Worker,
 } from "mediasoup/types";
 import logger from "./logger.js";
 import { Proxy } from "./proxy.js";
 
-interface HubOptions {
+interface HubOption {
   id: string;
+  publicIp: string;
   portRange: [number, number];
   availableCodecs: RouterRtpCodecCapability[];
 }
 
-interface ProducerHubOptions extends HubOptions {
-  role: ["producer", "consumer"] | ["consumer", "producer"] | ["producer"];
-  producerOptions: ProducerOptions[];
+interface ProducerHubOption extends HubOption {
+  role: ["producer"];
+  producerOptions: ProducerOption[];
 }
 
-interface ConsumerHubOptions extends HubOptions {
-  role: ["consumer"];
+interface CombinedHubOption extends HubOption {
+  role: ["producer", "consumer"] | ["consumer", "producer"];
+  producerOptions: ProducerOption[];
+  consumerOption: ConsumerOption;
 }
 
-interface ProducerOptions {
+interface ProducerOption {
   id: string;
   ip: string;
   port: number;
   videoCodecs: RtpCodecParameters[];
 }
 
+interface ConsumerHubOption extends HubOption {
+  role: ["consumer"];
+  consumerOption: ConsumerOption;
+}
+
+interface ConsumerOption {
+  port: number;
+}
+
 class Hub {
   public id: string;
   public role: string[];
+  public publicIp: string;
   public portRange: [number, number];
   public availableCodecs: RouterRtpCodecCapability[];
-  public producerOptions?: ProducerOptions[];
+  public consumerOption?: ConsumerOption;
+  public producerOptions?: ProducerOption[];
   public isStopped = true;
 
   private worker!: Worker;
   private router!: Router;
+  private webRtcServer!: WebRtcServer;
   private plainTransports = new Map<string, PlainTransport>();
   private producers = new Map<string, Producer>();
   private proxies: Proxy[] = [];
@@ -55,17 +71,25 @@ class Hub {
   private webRtcTransports = new Map<string, WebRtcTransport>();
   private consumers = new Map<string, Consumer[]>();
 
-  public static create(options: ProducerHubOptions | ConsumerHubOptions) {
+  public static create(
+    options: CombinedHubOption | ProducerHubOption | ConsumerHubOption,
+  ) {
     return new Hub(options);
   }
 
-  private constructor(options: ProducerHubOptions | ConsumerHubOptions) {
+  private constructor(
+    options: CombinedHubOption | ProducerHubOption | ConsumerHubOption,
+  ) {
     this.id = options.id;
     this.role = options.role;
+    this.publicIp = options.publicIp;
     this.portRange = options.portRange;
     this.availableCodecs = options.availableCodecs;
     if ("producerOptions" in options) {
       this.producerOptions = options.producerOptions;
+    }
+    if ("consumerOption" in options) {
+      this.consumerOption = options.consumerOption;
     }
   }
 
@@ -85,6 +109,18 @@ class Hub {
     this.router = await this.worker.createRouter({
       mediaCodecs: this.availableCodecs,
     });
+
+    if (this.role.includes("consumer") && this.consumerOption) {
+      this.webRtcServer = await this.worker.createWebRtcServer({
+        listenInfos: [
+          {
+            protocol: "udp",
+            ip: this.publicIp,
+            port: this.consumerOption.port,
+          },
+        ],
+      });
+    }
 
     if (this.role.includes("producer") && this.producerOptions) {
       for (const producerOptions of this.producerOptions) {
@@ -118,6 +154,13 @@ class Hub {
         });
 
         this.producers.set(producerOptions.id, producer);
+
+        /*
+        setInterval(async () => {
+          const status = await transport.getStats();
+          console.log(status[0].bytesReceived);
+        }, 3000);
+        */
 
         logger.info(
           `Producer ${producerOptions.id} created on port ${producerOptions.port}`,
@@ -200,11 +243,7 @@ class Hub {
 
   public async createWebRtcTransport() {
     const webRtcTransport = await this.router.createWebRtcTransport({
-      listenIps: [
-        {
-          ip: "127.0.0.1",
-        },
-      ],
+      webRtcServer: this.webRtcServer,
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,

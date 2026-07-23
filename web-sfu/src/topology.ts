@@ -1,7 +1,8 @@
 import { RouterRtpCodecCapability, RtpCodecParameters } from "mediasoup/types";
 import { Hub } from "./hub.js";
 
-interface TopologyOptions {
+interface TopologyOption {
+  publicIp: string;
   portRange: [number, number];
   availableCodecs: RouterRtpCodecCapability[];
 }
@@ -10,40 +11,56 @@ interface HubOptions {
   id: string;
 }
 
-interface ProducerHubOptions extends HubOptions {
-  role: ["producer", "consumer"] | ["consumer", "producer"] | ["producer"];
-  producerOptions: ProducerOptions[];
+interface ProducerHubOption extends HubOptions {
+  role: ["producer"];
+  producerOptions: ProducerOption[];
 }
 
-interface ConsumerHubOptions extends HubOptions {
-  role: ["consumer"];
+interface CombinedHubOption extends HubOptions {
+  role: ["producer", "consumer"] | ["consumer", "producer"];
+  producerOptions: ProducerOption[];
+  consumerOption: ConsumerOption;
 }
 
-interface ProducerOptions {
+interface ProducerOption {
   id: string;
   ip: string;
   port: number;
   videoCodecs: RtpCodecParameters[];
 }
 
+interface ConsumerHubOption extends HubOptions {
+  role: ["consumer"];
+  consumerOption: ConsumerOption;
+}
+
+interface ConsumerOption {
+  port: number;
+}
+
 class Topology {
+  private publicIp: string;
   private portRange: [number, number];
   private availableCodecs: RouterRtpCodecCapability[];
   private hubs = new Map<string, Hub>();
   private pipes: [string, string][] = [];
 
-  public static create(options: TopologyOptions) {
+  public static create(options: TopologyOption) {
     return new Topology(options);
   }
 
-  constructor(options: TopologyOptions) {
+  constructor(options: TopologyOption) {
+    this.publicIp = options.publicIp;
     this.portRange = options.portRange;
     this.availableCodecs = options.availableCodecs;
   }
 
-  public createHub(options: ProducerHubOptions | ConsumerHubOptions) {
+  public createHub(
+    options: CombinedHubOption | ProducerHubOption | ConsumerHubOption,
+  ) {
     const hub = Hub.create({
       ...options,
+      publicIp: this.publicIp,
       portRange: this.portRange,
       availableCodecs: this.availableCodecs,
     });
